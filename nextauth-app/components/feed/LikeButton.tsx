@@ -21,8 +21,8 @@ export default function LikeButton({ postId, initialLiked, initialCount }: LikeB
 
   function handleLike() {
     const action = optimistic.liked ? "unlike" : "like";
-    addOptimistic(action);
     startTransition(async () => {
+      addOptimistic(action);
       await toggleLike(postId);
     });
   }

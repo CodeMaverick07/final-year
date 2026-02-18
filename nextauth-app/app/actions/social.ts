@@ -15,10 +15,16 @@ export async function toggleLike(postId: string) {
 
   if (existing) {
     await prisma.like.delete({ where: { id: existing.id } });
+    revalidatePath("/");
+    revalidatePath("/feed");
+    revalidatePath(`/post/${postId}`);
     return { liked: false };
   }
 
   await prisma.like.create({ data: { userId: session.user.id, postId } });
+  revalidatePath("/");
+  revalidatePath("/feed");
+  revalidatePath(`/post/${postId}`);
   return { liked: true };
 }
 
@@ -33,6 +39,8 @@ export async function addComment(postId: string, body: string, parentId?: string
     data: { body: body.trim(), postId, userId: session.user.id, parentId },
     include: { user: { select: { id: true, name: true, image: true } } },
   });
+  revalidatePath("/");
+  revalidatePath("/feed");
   revalidatePath(`/post/${postId}`);
   return comment;
 }
@@ -48,10 +56,16 @@ export async function toggleBookmark(postId: string) {
 
   if (existing) {
     await prisma.bookmark.delete({ where: { id: existing.id } });
+    revalidatePath("/");
+    revalidatePath("/feed");
+    revalidatePath(`/post/${postId}`);
     return { bookmarked: false };
   }
 
   await prisma.bookmark.create({ data: { userId: session.user.id, postId } });
+  revalidatePath("/");
+  revalidatePath("/feed");
+  revalidatePath(`/post/${postId}`);
   return { bookmarked: true };
 }
 
@@ -72,11 +86,17 @@ export async function toggleFollow(targetUserId: string) {
 
   if (existing) {
     await prisma.follow.delete({ where: { id: existing.id } });
+    revalidatePath("/");
+    revalidatePath("/feed");
+    revalidatePath(`/profile/${targetUserId}`);
     return { following: false };
   }
 
   await prisma.follow.create({
     data: { followerId: session.user.id, followingId: targetUserId },
   });
+  revalidatePath("/");
+  revalidatePath("/feed");
+  revalidatePath(`/profile/${targetUserId}`);
   return { following: true };
 }

@@ -20,8 +20,8 @@ export default function FollowButton({ targetUserId, initialFollowing, compact =
 
   function handleFollow() {
     const action = optimistic.following ? "unfollow" : "follow";
-    addOptimistic(action);
     startTransition(async () => {
+      addOptimistic(action);
       await toggleFollow(targetUserId);
     });
   }

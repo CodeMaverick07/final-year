@@ -16,6 +16,12 @@ export default function FeedClient({ initialPosts, currentUser }: FeedClientProp
   const [loading, setLoading] = useState(false);
   const loaderRef = useRef<HTMLDivElement>(null);
 
+  // Sync with server-side revalidation
+  useEffect(() => {
+    setPosts(initialPosts);
+    setCursor(String(initialPosts.length));
+  }, [initialPosts]);
+
   const loadMore = useCallback(async () => {
     if (loading || !cursor) return;
     setLoading(true);

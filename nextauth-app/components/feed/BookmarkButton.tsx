@@ -19,8 +19,8 @@ export default function BookmarkButton({ postId, initialBookmarked }: BookmarkBu
 
   function handleBookmark() {
     const action = optimistic.bookmarked ? "unbookmark" : "bookmark";
-    addOptimistic(action);
     startTransition(async () => {
+      addOptimistic(action);
       await toggleBookmark(postId);
     });
   }

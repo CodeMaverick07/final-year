@@ -21,8 +21,8 @@ This file contains comprehensive information about the project structure, techno
 - Personalized recommendation feed with scored ranking algorithm.
 - Editorial dark UI theme with Playfair Display + DM Sans fonts.
 - User profiles with posts grid, media-type filtered tabs, follower/following lists.
-- Optimistic UI with `useOptimistic` for Like, Follow, Bookmark.
 - **Navigation**: Dedicated Sidebar for authenticated users, hiding global Navbar on protected routes.
+- **State Synchronization**: `FeedClient` uses a `useEffect` synchronization pattern to ensure that server-side `revalidatePath` calls update the client-side infinite scroll state.
 
 
 ---
@@ -240,7 +240,7 @@ Scored ranking (computed server-side):
 Sorted by score DESC, createdAt DESC. Paginated with cursor.
 
 ### Optimistic UI
-Uses `useOptimistic` (React 19) for instant feedback:
+Uses `useOptimistic` (React 19) for instant feedback. **Implementation Rule**: All optimistic updates (`addOptimistic`) must be wrapped within a `startTransition` block to avoid React warnings and ensure proper state reconciliation.
 - Like: toggle heart + count
 - Follow: toggle button label
 - Bookmark: toggle fill
