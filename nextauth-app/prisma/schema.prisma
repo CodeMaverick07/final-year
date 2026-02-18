@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── NextAuth Required Models ─────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // nullable — OAuth users won't have one
+  bio           String?
+  username      String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+
+  posts         Post[]
+  likes         Like[]
+  comments      Comment[]
+  bookmarks     Bookmark[]
+
+  followers     Follow[]  @relation("Following") // people who follow this user
+  following     Follow[]  @relation("Follower")  // people this user follows
+
+  notifications Notification[] @relation("NotificationRecipient")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Core Content Models ──────────────────────────────────────────────────────
+
+model Post {
+  id          String      @id @default(cuid())
+  title       String
+  subtitle    String?
+  description String?     @db.Text
+  isPublic    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  authorId    String
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  media         Media[]
+  likes         Like[]
+  comments      Comment[]
+  bookmarks     Bookmark[]
+  tags          PostTag[]
+  manuscriptOcr ManuscriptOCR?
+}
+
+enum MediaType {
+  IMAGE
+  AUDIO
+  VIDEO
+}
+
+model Media {
+  id        String    @id @default(cuid())
+  postId    String
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type      MediaType
+  url       String    // S3 public or presigned URL
+  s3Key     String    // raw S3 object key for deletion
+  mimeType  String?
+  size      Int?      // bytes
+  duration  Int?      // seconds — for audio/video
+  width     Int?      // px — for images/video
+  height    Int?
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  body      String   @db.Text
+  userId    String
+  postId    String
+  parentId  String?  // for threaded replies
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post     Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentReplies")
+}
+
+model Bookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String   // the person who clicks "Follow"
+  followingId String   // the person being followed
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower",  fields: [followerId],  references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+}
+
+model Tag {
+  id    String    @id @default(cuid())
+  name  String    @unique
+  posts PostTag[]
+}
+
+model PostTag {
+  postId String
+  tagId  String
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId],  references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  actorId     String?
+  type        NotificationType
+  postId      String?
+  commentId   String?
+  read        Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  FOLLOW
+  REPLY
+}
+
+// ─── OCR & Translation ────────────────────────────────────────────────────────
+
+model ManuscriptOCR {
+  id                  String   @id @default(cuid())
+  postId              String   @unique          // one OCR record per post
+  post                Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  rawOcrText          String   @db.Text         // raw output from Google Vision OCR
+  reconstructedText   String?  @db.Text         // Gemini-filled/reconstructed version
+  ocrConfidence       Float?                    // average confidence score if available
+  ocrStatus           OcrStatus @default(PENDING)
+  ocrError            String?
+
+  // Translations — null until user requests them
+  translationHindi    String?  @db.Text
+  translationEnglish  String?  @db.Text
+  translationStatus   TranslationStatus @default(NONE)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+enum OcrStatus {
+  PENDING       // upload done, OCR not yet run
+  PROCESSING    // OCR call in-flight
+  RECONSTRUCTING // Gemini filling blanks
+  DONE          // reconstructedText is ready
+  FAILED
+}
+
+enum TranslationStatus {
+  NONE          // never requested
+  PROCESSING    // Gemini call in-flight
+  DONE          // both translations stored
+  PARTIAL       // one language done
+  FAILED
+}
