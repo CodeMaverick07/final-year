@@ -12,9 +12,13 @@ function formatBytes(bytes: number) {
 }
 
 function getMediaBadge(type: string) {
+  if (type === "application/pdf" || type === "application/x-pdf") {
+    return { label: "PDF", color: "bg-amber-500/10 text-amber-400" };
+  }
   if (type.startsWith("image/")) return { label: "IMAGE", color: "bg-green-500/10 text-green-400" };
   if (type.startsWith("audio/")) return { label: "AUDIO", color: "bg-blue-500/10 text-blue-400" };
-  return { label: "VIDEO", color: "bg-purple-500/10 text-purple-400" };
+  if (type.startsWith("video/")) return { label: "VIDEO", color: "bg-purple-500/10 text-purple-400" };
+  return { label: "FILE", color: "bg-zinc-500/10 text-zinc-400" };
 }
 
 export default function FilePreview({ file, onRemove }: FilePreviewProps) {
@@ -27,6 +31,12 @@ export default function FilePreview({ file, onRemove }: FilePreviewProps) {
       <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-bg">
         {previewUrl ? (
           <img src={previewUrl} alt={file.name} className="h-full w-full object-cover" />
+        ) : file.type === "application/pdf" || file.type === "application/x-pdf" ? (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" strokeWidth="1.5">
+            <path d="M6 2h9l5 5v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" />
+            <path d="M14 2v6h6" />
+            <path d="M8 14h8M8 18h6" />
+          </svg>
         ) : file.type.startsWith("audio/") ? (
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" strokeWidth="1.5">
             <path d="M9 18V5l12-2v13" strokeLinecap="round" strokeLinejoin="round" />

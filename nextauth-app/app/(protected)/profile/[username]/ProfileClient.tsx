@@ -10,7 +10,7 @@ type Post = {
   id: string;
   title: string;
   isPublic: boolean;
-  media: { type: string; url: string }[];
+  media: { type: string; url: string; mimeType: string | null }[];
   _count: { likes: number; comments: number };
 };
 
@@ -29,10 +29,13 @@ type ProfileClientProps = {
     username: string | null;
     image: string | null;
     bio: string | null;
+    isPrivate: boolean;
     _count: { posts: number; followers: number; following: number };
   };
   isOwnProfile: boolean;
   isFollowing: boolean;
+  canViewPosts: boolean;
+  canViewConnections: boolean;
   posts: Post[];
   followers: FollowUser[];
   following: FollowUser[];
@@ -43,6 +46,8 @@ export default function ProfileClient({
   user,
   isOwnProfile,
   isFollowing,
+  canViewPosts,
+  canViewConnections,
   posts,
   followers,
   following,
@@ -86,21 +91,40 @@ export default function ProfileClient({
   return (
     <>
       {/* Make follower/following counts clickable */}
-      <div onClick={(e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('[data-followers]')) setShowFollowers(true);
-        if (target.closest('[data-following]')) setShowFollowing(true);
-      }}>
-        <ProfileHeader user={user} isOwnProfile={isOwnProfile} isFollowing={isFollowing} />
+      <div
+        onClick={(e) => {
+          if (!canViewConnections) return;
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-followers]")) setShowFollowers(true);
+          if (target.closest("[data-following]")) setShowFollowing(true);
+        }}
+      >
+        <ProfileHeader
+          user={user}
+          isOwnProfile={isOwnProfile}
+          isFollowing={isFollowing}
+          canViewConnections={canViewConnections}
+        />
       </div>
 
-      <div className="mt-6">
-        <TabBar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
-      </div>
+      {!canViewPosts && user.isPrivate ? (
+        <div className="mt-6 rounded-xl border border-border bg-bg-surface p-6 text-center">
+          <p className="font-heading text-xl text-text-primary">Private Profile</p>
+          <p className="mt-2 text-sm text-text-muted">
+            Follow this user to view their posts and connections.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="mt-6">
+            <TabBar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+          </div>
 
-      <div className="mt-6">
-        <PostGrid posts={filteredPosts} />
-      </div>
+          <div className="mt-6">
+            <PostGrid posts={filteredPosts} />
+          </div>
+        </>
+      )}
 
       <FollowList
         open={showFollowers}

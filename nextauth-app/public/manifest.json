@@ -1,0 +1,50 @@
+{
+  "name": "Sanskriti",
+  "short_name": "Sanskriti",
+  "description": "Manuscript Sharing & Digitization Platform",
+  "start_url": "/feed",
+  "display": "standalone",
+  "background_color": "#0F0E0C",
+  "theme_color": "#C9A96E",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-feed.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "categories": ["education", "social"],
+  "shortcuts": [
+    {
+      "name": "Capture Manuscript",
+      "url": "/capture",
+      "icons": [{ "src": "/icons/icon-capture.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Record",
+      "url": "/record",
+      "icons": [{ "src": "/icons/icon-record.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Upload",
+      "url": "/upload",
+      "icons": [{ "src": "/icons/icon-upload.png", "sizes": "96x96" }]
+    }
+  ]
+}

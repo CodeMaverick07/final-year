@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { SignOutButton } from "./SignOutButton";
+import { ThemeToggle } from "./ThemeToggle";
 
 export default async function Navbar() {
   const session = await auth();
@@ -35,58 +36,80 @@ export default async function Navbar() {
           <div className="flex items-center gap-1">
             {session?.user ? (
               <>
-                <Link
-                  href="/feed"
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
-                >
-                  Feed
-                </Link>
-                <Link
-                  href="/upload"
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
-                >
-                  Upload
-                </Link>
-                <Link
-                  href="/profile"
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
-                >
-                  Profile
-                </Link>
-                <Link
-                  href="/dashboard"
-                  className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
-                >
-                  Dashboard
-                </Link>
+                <div className="hidden items-center gap-1 md:flex">
+                  <Link
+                    href="/feed"
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+                  >
+                    Feed
+                  </Link>
+                  <Link
+                    href="/upload"
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+                  >
+                    Upload
+                  </Link>
+                  <Link
+                    href="/profile"
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+                  >
+                    Profile
+                  </Link>
+                  <Link
+                    href="/settings"
+                    className="rounded-lg px-3 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-bg-surface hover:text-text-primary"
+                  >
+                    Settings
+                  </Link>
 
-                <div className="ml-2 flex items-center gap-2 rounded-full border border-border bg-bg-surface py-1.5 pl-3 pr-1.5">
-                  <span className="text-sm text-text-muted">
-                    {session.user.name || session.user.email}
-                  </span>
-                  {session.user.image ? (
-                    <img
-                      src={session.user.image}
-                      alt="Avatar"
-                      className="h-7 w-7 rounded-full ring-1 ring-accent/50"
-                    />
-                  ) : (
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
-                      {(session.user.name || session.user.email || "U")
-                        .charAt(0)
-                        .toUpperCase()}
-                    </div>
-                  )}
+                  <div className="ml-2 flex items-center gap-2 rounded-full border border-border bg-bg-surface py-1.5 pl-3 pr-1.5">
+                    <span className="text-sm text-text-muted">
+                      {session.user.name || session.user.email}
+                    </span>
+                    {session.user.image ? (
+                      <img
+                        src={session.user.image}
+                        alt="Avatar"
+                        className="h-7 w-7 rounded-full ring-1 ring-accent/50"
+                      />
+                    ) : (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
+                        {(session.user.name || session.user.email || "U")
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <SignOutButton />
                 </div>
-                <SignOutButton />
+
+                <div className="flex items-center gap-2 md:hidden">
+                  <Link
+                    href="/feed"
+                    className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-text-muted"
+                  >
+                    Feed
+                  </Link>
+                  <Link
+                    href="/upload"
+                    className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-text-muted"
+                  >
+                    Upload
+                  </Link>
+                </div>
               </>
             ) : (
-              <Link
-                href="/login"
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg transition-all hover:bg-accent/90"
-              >
-                Sign In
-              </Link>
+              <div className="flex items-center gap-2">
+                <div className="hidden md:block">
+                  <ThemeToggle compact />
+                </div>
+                <Link
+                  href="/login"
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-bg transition-all hover:bg-accent/90"
+                >
+                  Sign In
+                </Link>
+              </div>
             )}
           </div>
         </div>

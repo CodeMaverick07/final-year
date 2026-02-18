@@ -8,6 +8,7 @@ type ProfileHeaderProps = {
     username: string | null;
     image: string | null;
     bio: string | null;
+    isPrivate: boolean;
     _count: {
       posts: number;
       followers: number;
@@ -16,9 +17,15 @@ type ProfileHeaderProps = {
   };
   isOwnProfile: boolean;
   isFollowing: boolean;
+  canViewConnections: boolean;
 };
 
-export default function ProfileHeader({ user, isOwnProfile, isFollowing }: ProfileHeaderProps) {
+export default function ProfileHeader({
+  user,
+  isOwnProfile,
+  isFollowing,
+  canViewConnections,
+}: ProfileHeaderProps) {
   return (
     <div className="border-b border-border pb-8">
       <div className="flex flex-col items-center gap-6 sm:flex-row sm:items-start">
@@ -39,6 +46,9 @@ export default function ProfileHeader({ user, isOwnProfile, isFollowing }: Profi
           {user.username && (
             <p className="mt-0.5 text-sm text-text-muted">@{user.username}</p>
           )}
+          {user.isPrivate && (
+            <p className="mt-1 text-xs text-text-muted">Private account</p>
+          )}
 
           {user.bio && (
             <p className="mt-2 max-w-lg text-sm text-text-primary/80">{user.bio}</p>
@@ -50,14 +60,24 @@ export default function ProfileHeader({ user, isOwnProfile, isFollowing }: Profi
               <p className="font-heading text-lg font-bold text-text-primary">{user._count.posts}</p>
               <p className="text-xs text-text-muted">Posts</p>
             </div>
-            <div className="text-center">
+            <button
+              type="button"
+              data-followers
+              disabled={!canViewConnections}
+              className={`text-center ${canViewConnections ? "cursor-pointer hover:text-accent" : "cursor-not-allowed opacity-70"}`}
+            >
               <p className="font-heading text-lg font-bold text-text-primary">{user._count.followers}</p>
               <p className="text-xs text-text-muted">Followers</p>
-            </div>
-            <div className="text-center">
+            </button>
+            <button
+              type="button"
+              data-following
+              disabled={!canViewConnections}
+              className={`text-center ${canViewConnections ? "cursor-pointer hover:text-accent" : "cursor-not-allowed opacity-70"}`}
+            >
               <p className="font-heading text-lg font-bold text-text-primary">{user._count.following}</p>
               <p className="text-xs text-text-muted">Following</p>
-            </div>
+            </button>
           </div>
         </div>
       </div>

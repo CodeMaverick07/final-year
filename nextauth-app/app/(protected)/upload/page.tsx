@@ -27,7 +27,28 @@ export default function UploadPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadPhase, setUploadPhase] = useState<"uploading" | "finalizing">("uploading");
   const [fileProgress, setFileProgress] = useState<UploadFileProgress[]>([]);
+
+  async function finalizeWithTimeout(postId: string, timeoutMs = 20000) {
+    return Promise.race([
+      finalizeUpload(postId),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Finalize upload timed out")), timeoutMs)
+      ),
+    ]);
+  }
+
+  function navigateToPost(postId: string) {
+    const href = `/post/${postId}`;
+    router.replace(href);
+    // Fallback to hard navigation if client-side transition stalls.
+    setTimeout(() => {
+      if (typeof window !== "undefined" && window.location.pathname !== href) {
+        window.location.assign(href);
+      }
+    }, 1500);
+  }
 
   function handleFilesSelected(newFiles: File[]) {
     setFiles((prev) => [...prev, ...newFiles]);
@@ -48,7 +69,11 @@ export default function UploadPage() {
     }
 
     setIsUploading(true);
+    setUploadPhase("uploading");
     setFileProgress(files.map((f) => ({ name: f.name, progress: 0, done: false })));
+
+    let createdPostId: string | null = null;
+    let uploadedToS3 = false;
 
     try {
       const result = await initiateUpload({
@@ -59,6 +84,7 @@ export default function UploadPage() {
         tags,
         files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })),
       });
+      createdPostId = result.postId;
 
       // Upload each file to S3 using presigned URLs
       await Promise.all(
@@ -89,7 +115,7 @@ export default function UploadPage() {
               };
               xhr.onerror = () => reject(new Error("Upload failed"));
               xhr.open("PUT", upload.presignedUrl);
-              xhr.setRequestHeader("Content-Type", files[index].type);
+              xhr.setRequestHeader("Content-Type", upload.contentType || files[index].type || "application/octet-stream");
               xhr.send(files[index]);
             });
           } catch (err) {
@@ -102,20 +128,31 @@ export default function UploadPage() {
           }
         })
       );
+      uploadedToS3 = true;
 
+      setUploadPhase("finalizing");
       toast.success("Manuscript uploaded successfully!");
-      // Trigger OCR pipeline for image posts
-      await finalizeUpload(result.postId);
-      setTimeout(() => router.push(`/post/${result.postId}`), 1500);
-    } catch {
-      toast.error("Upload failed. Please try again.");
+      // Finalize post + enqueue OCR
+      await finalizeWithTimeout(result.postId);
       setIsUploading(false);
+      navigateToPost(result.postId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed. Please try again.";
+      if (uploadedToS3 && createdPostId) {
+        toast.error(`Upload finished, but queue setup failed: ${message}. Opening post...`);
+        setIsUploading(false);
+        navigateToPost(createdPostId);
+        return;
+      }
+      toast.error(message);
+      setIsUploading(false);
+      setUploadPhase("uploading");
     }
   }
 
   return (
-    <div className="min-h-screen bg-bg pt-20">
-      <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="min-h-screen bg-bg pt-16 md:pt-20">
+      <div className="mx-auto max-w-2xl px-4 py-6 md:py-8">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="font-heading text-3xl font-bold text-text-primary">
@@ -251,7 +288,7 @@ export default function UploadPage() {
               </>
             )}
 
-            {isUploading && <UploadProgress files={fileProgress} />}
+            {isUploading && <UploadProgress files={fileProgress} phase={uploadPhase} />}
           </div>
         )}
       </div>

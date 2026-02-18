@@ -2,47 +2,67 @@
 
 import { useEffect, useState } from "react";
 
-// Poll the post's OCR status every 3s while PROCESSING or RECONSTRUCTING
-export function OcrStatusBanner({
-  postId,
-  initialStatus,
-}: {
-  postId: string;
-  initialStatus: string;
-}) {
-  const [status, setStatus] = useState(initialStatus);
+type StatusData = {
+  ocrStatus: string;
+  job?: {
+    status: string;
+    attempts: number;
+    maxAttempts: number;
+    nextRetryAt?: string;
+  } | null;
+};
+
+export function OcrStatusBanner({ postId, initialStatus }: { postId: string; initialStatus: string }) {
+  const [data, setData] = useState<StatusData>({ ocrStatus: initialStatus });
 
   useEffect(() => {
+    const status = data.ocrStatus;
     if (status === "DONE" || status === "FAILED") return;
 
     const interval = setInterval(async () => {
-      const res = await fetch(`/api/posts/${postId}/ocr-status`);
-      const data = await res.json();
-      setStatus(data.ocrStatus);
-      if (data.ocrStatus === "DONE" || data.ocrStatus === "FAILED") {
-        clearInterval(interval);
-        // Reload to get fresh server-rendered OCR text
-        window.location.reload();
+      try {
+        const res = await fetch(`/api/posts/${postId}/ocr-status`);
+        if (!res.ok) return;
+
+        const body = await res.text();
+        if (!body) return;
+
+        const json = JSON.parse(body) as StatusData;
+        setData(json);
+        if (json.ocrStatus === "DONE" || json.ocrStatus === "FAILED") {
+          clearInterval(interval);
+          if (json.ocrStatus === "DONE") window.location.reload();
+        }
+      } catch {
+        // Ignore transient polling/parse errors and retry on next interval tick.
       }
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [status, postId]);
+  }, [data.ocrStatus, postId]);
 
-  const messages: Record<string, string> = {
-    PENDING: "⏳ Queued for processing...",
-    PROCESSING: "🔍 Extracting text from manuscript...",
-    RECONSTRUCTING: "✨ Reconstructing text with AI...",
-    DONE: "",
-    FAILED: "❌ Processing failed.",
+  if (data.ocrStatus === "DONE") return null;
+
+  const { job } = data;
+  const isWaitingForCron = data.ocrStatus === "PENDING" || job?.status === "PENDING";
+  const isRetrying = !!job && job.attempts > 1;
+
+  const getMessage = () => {
+    if (data.ocrStatus === "FAILED") return "❌ Processing failed after multiple attempts.";
+    if (data.ocrStatus === "RECONSTRUCTING") return "✨ AI is reconstructing the manuscript text...";
+    if (data.ocrStatus === "PROCESSING") return "🔍 Extracting text from manuscript...";
+    if (isRetrying) return `⟳ Retrying... (attempt ${job!.attempts}/${job!.maxAttempts})`;
+    if (isWaitingForCron) return "⏳ Queued for processing — this happens in the background.";
+    return "⏳ Processing...";
   };
 
-  if (status === "DONE") return null;
-
   return (
-    <div className="ocr-status-banner" data-status={status}>
+    <div className="ocr-status-banner" data-status={data.ocrStatus}>
       <span className="status-dot" />
-      {messages[status] ?? "Processing..."}
+      <span>{getMessage()}</span>
+      {isWaitingForCron && (
+        <span className="banner-hint">You can close this page — we&apos;ll keep processing.</span>
+      )}
     </div>
   );
 }

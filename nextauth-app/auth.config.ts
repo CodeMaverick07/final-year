@@ -36,7 +36,7 @@ export default {
       const { pathname } = nextUrl;
 
       // Protect these routes
-      const protectedPaths = ["/dashboard", "/upload", "/feed", "/profile"];
+      const protectedPaths = ["/dashboard", "/upload", "/feed", "/profile", "/capture", "/record", "/saved", "/settings"];
       const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
       if (isProtected && !isLoggedIn) {
         const loginUrl = new URL("/login", nextUrl.origin);

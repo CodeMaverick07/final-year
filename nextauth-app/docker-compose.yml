@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   db:
     container_name: nextauth_postgres
@@ -13,8 +11,6 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: nextauth_db
     restart: unless-stopped
-
-
 
 volumes:
   postgres_data:

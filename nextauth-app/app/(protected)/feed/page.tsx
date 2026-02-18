@@ -10,8 +10,8 @@ export default async function FeedPage() {
   const initialPosts = await getRecommendedFeed(session.user.id);
 
   return (
-    <div className="min-h-screen bg-bg pt-20">
-      <div className="mx-auto max-w-xl px-4 py-8">
+    <div className="min-h-screen bg-bg pt-16 md:pt-20">
+      <div className="mx-auto max-w-xl px-4 py-6 md:py-8">
         <h1 className="mb-8 text-center font-heading text-3xl font-bold text-text-primary">
           Discover
         </h1>

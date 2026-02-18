@@ -1,8 +1,13 @@
+// NOTE: This route is no longer called by the app.
+// Processing is now handled by the cron queue at /api/cron/process-queue
+// Kept for manual debugging only.
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runGeminiReconstruction } from "@/lib/gemini";
 
 export const maxDuration = 120; // Allow up to 2 min for this route
+const MEDIA_FETCH_TIMEOUT_MS = 45_000;
+const OCR_REQUEST_TIMEOUT_MS = 120_000;
 
 export async function POST(req: NextRequest) {
   // Security: only callable from server
@@ -12,21 +17,35 @@ export async function POST(req: NextRequest) {
   }
 
   const { postId, imageUrls }: { postId: string; imageUrls: string[] } = await req.json();
+  const ocrServiceUrl = process.env.OCR_SERVICE_URL || "http://localhost:8001";
 
   try {
     // ── Step 1: OCR each image via FastAPI ───────────────────────────────────
     const ocrResults = await Promise.allSettled(
       imageUrls.map(async (url) => {
-        // Fetch image bytes, forward as multipart to FastAPI
-        const imageRes = await fetch(url);
+        // Fetch image/PDF bytes, forward as multipart to FastAPI
+        const imageRes = await fetch(url, {
+          signal: AbortSignal.timeout(MEDIA_FETCH_TIMEOUT_MS),
+        });
         const imageBuffer = await imageRes.arrayBuffer();
+        
+        // Detect if it's a PDF - check URL extension and Content-Type header
+        const contentType = imageRes.headers.get("content-type") || "";
+        const isPdf = url.toLowerCase().endsWith(".pdf") || 
+          contentType.includes("application/pdf") ||
+          contentType.includes("pdf");
 
         const form = new FormData();
-        form.append("file", new Blob([imageBuffer], { type: "image/jpeg" }), "page.jpg");
+        if (isPdf) {
+          form.append("file", new Blob([imageBuffer], { type: "application/pdf" }), "document.pdf");
+        } else {
+          form.append("file", new Blob([imageBuffer], { type: "image/jpeg" }), "page.jpg");
+        }
 
-        const ocrRes = await fetch(`${process.env.OCR_SERVICE_URL}/ocr`, {
+        const ocrRes = await fetch(`${ocrServiceUrl}/ocr`, {
           method: "POST",
           body: form,
+          signal: AbortSignal.timeout(OCR_REQUEST_TIMEOUT_MS),
         });
         const data = await ocrRes.json();
         if (data.error) throw new Error(data.error);

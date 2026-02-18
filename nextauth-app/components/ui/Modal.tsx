@@ -14,7 +14,7 @@ export default function Modal({ open, onOpenChange, title, children }: ModalProp
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-surface p-6 shadow-2xl">
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-bg-surface p-4 shadow-2xl sm:p-6">
           {title && (
             <Dialog.Title className="mb-4 font-heading text-xl font-semibold text-text-primary">
               {title}

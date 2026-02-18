@@ -16,7 +16,9 @@ export async function GET(
   const post = await prisma.post.findUnique({
     where: { id },
     include: {
-      author: { select: { id: true, name: true, username: true, image: true } },
+      author: {
+        select: { id: true, name: true, username: true, image: true, isPrivate: true },
+      },
       media: { orderBy: { order: "asc" } },
       tags: { include: { tag: true } },
       comments: {
@@ -33,9 +35,26 @@ export async function GET(
     return NextResponse.json({ error: "Post not found" }, { status: 404 });
   }
 
-  // Check visibility
-  if (!post.isPublic && post.authorId !== session.user.id) {
-    return NextResponse.json({ error: "Post not found" }, { status: 404 });
+  const isOwnPost = post.authorId === session.user.id;
+  if (!isOwnPost) {
+    if (!post.isPublic) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    }
+
+    if (post.author.isPrivate) {
+      const followsAuthor = await prisma.follow.findUnique({
+        where: {
+          followerId_followingId: {
+            followerId: session.user.id,
+            followingId: post.authorId,
+          },
+        },
+        select: { id: true },
+      });
+      if (!followsAuthor) {
+        return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      }
+    }
   }
 
   return NextResponse.json(post);

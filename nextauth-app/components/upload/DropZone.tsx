@@ -19,9 +19,10 @@ export default function DropZone({ onFilesSelected, disabled = false }: DropZone
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "image/*": [],
-      "audio/*": [],
-      "video/*": [],
+      "image/*": [".jpg", ".jpeg", ".png", ".webp", ".tiff"],
+      "audio/*": [".mp3", ".wav", ".m4a", ".ogg"],
+      "video/*": [".mp4", ".mov", ".webm"],
+      "application/pdf": [".pdf"],
     },
     disabled,
     multiple: true,
@@ -30,7 +31,7 @@ export default function DropZone({ onFilesSelected, disabled = false }: DropZone
   return (
     <div
       {...getRootProps()}
-      className={`dropzone-border flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-xl p-8 transition-all ${
+      className={`dropzone-border flex min-h-[170px] cursor-pointer flex-col items-center justify-center rounded-xl p-5 text-center transition-all sm:min-h-[200px] sm:p-8 ${
         isDragActive ? "active" : ""
       } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
     >
@@ -58,7 +59,7 @@ export default function DropZone({ onFilesSelected, disabled = false }: DropZone
             Drag & drop files here, or <span className="text-accent underline">browse</span>
           </p>
           <p className="mt-1 text-xs text-text-muted">
-            Images, audio recordings, and video clips
+            Images, PDFs, audio recordings, and video clips
           </p>
         </>
       )}

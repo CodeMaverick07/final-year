@@ -36,38 +36,126 @@ export type FeedPost = {
   ocrStatus?: string | null;
 };
 
+export type SearchUser = {
+  id: string;
+  name: string | null;
+  username: string | null;
+  image: string | null;
+  isPrivate: boolean;
+  isFollowing: boolean;
+};
+
+type RawPost = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  description: string | null;
+  isPublic: boolean;
+  createdAt: Date;
+  author: {
+    id: string;
+    name: string | null;
+    image: string | null;
+    username: string | null;
+  };
+  media: {
+    id: string;
+    type: string;
+    url: string;
+    mimeType: string | null;
+    width: number | null;
+    height: number | null;
+    duration: number | null;
+    order: number;
+  }[];
+  tags: { tag: { id: string; name: string } }[];
+  likes: { id: string }[];
+  bookmarks: { id: string }[];
+  _count: { likes: number; comments: number };
+  comments: { id: string; body: string; user: { name: string | null; image: string | null } }[];
+  manuscriptOcr: { ocrStatus: string } | null;
+};
+
+function mapPostToFeedPost(post: RawPost, followingIds: Set<string>): FeedPost {
+  return {
+    id: post.id,
+    title: post.title,
+    subtitle: post.subtitle,
+    description: post.description,
+    isPublic: post.isPublic,
+    createdAt: post.createdAt,
+    authorId: post.author.id,
+    authorName: post.author.name,
+    authorImage: post.author.image,
+    authorUsername: post.author.username,
+    likeCount: post._count.likes,
+    commentCount: post._count.comments,
+    isLiked: post.likes.length > 0,
+    isBookmarked: post.bookmarks.length > 0,
+    isFollowing: followingIds.has(post.author.id),
+    media: post.media.map((m) => ({
+      id: m.id,
+      type: m.type,
+      url: m.url,
+      mimeType: m.mimeType,
+      width: m.width,
+      height: m.height,
+      duration: m.duration,
+      order: m.order,
+    })),
+    tags: post.tags.map((t) => t.tag.name),
+    recentComments: post.comments.map((c) => ({
+      id: c.id,
+      body: c.body,
+      userName: c.user.name,
+      userImage: c.user.image,
+    })),
+    ocrStatus: post.manuscriptOcr?.ocrStatus ?? null,
+  };
+}
+
+async function getFollowingIds(userId: string) {
+  const rows = await prisma.follow.findMany({
+    where: { followerId: userId },
+    select: { followingId: true },
+  });
+  return rows.map((x) => x.followingId);
+}
+
 export async function getRecommendedFeed(
   userId: string,
   cursor?: string,
   limit: number = 20
 ): Promise<FeedPost[]> {
-  // Use a scored query approach
-  // Prisma doesn't support CTEs directly, so we use a simpler ranked approach
-  
   const offset = cursor ? parseInt(cursor) : 0;
 
-  // Get the user's following list, liked post tags
   const [followingIds, likedTagIds] = await Promise.all([
-    prisma.follow.findMany({
-      where: { followerId: userId },
-      select: { followingId: true },
-    }).then(f => f.map(x => x.followingId)),
-    prisma.like.findMany({
-      where: { userId },
-      select: { post: { select: { tags: { select: { tag: { select: { id: true } } } } } } },
-    }).then(likes => {
-      const ids = new Set<string>();
-      likes.forEach(l => l.post.tags.forEach(t => ids.add(t.tag.id)));
-      return Array.from(ids);
-    }),
+    getFollowingIds(userId),
+    prisma.like
+      .findMany({
+        where: { userId },
+        select: {
+          post: { select: { tags: { select: { tag: { select: { id: true } } } } } },
+        },
+      })
+      .then((likes) => {
+        const ids = new Set<string>();
+        likes.forEach((l) => l.post.tags.forEach((t) => ids.add(t.tag.id)));
+        return Array.from(ids);
+      }),
   ]);
 
-  // Fetch candidate posts
   const posts = await prisma.post.findMany({
     where: {
       AND: [
-        { authorId: { not: userId } }, // exclude own posts
+        { authorId: { not: userId } },
         { isPublic: true },
+        {
+          OR: [
+            { author: { isPrivate: false } },
+            { authorId: { in: followingIds.length > 0 ? followingIds : ["__none__"] } },
+          ],
+        },
       ],
     },
     include: {
@@ -85,34 +173,25 @@ export async function getRecommendedFeed(
       manuscriptOcr: { select: { ocrStatus: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: limit * 3, // fetch more to score and re-rank
+    take: limit * 3,
     skip: offset,
   });
 
-  // Score and rank
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const scored = posts.map(post => {
+  const scored = posts.map((post) => {
     let score = 0;
-
-    // +10 if from followed user
     if (followingIds.includes(post.authorId)) score += 10;
 
-    // +3 if tags overlap with user's liked tags
-    const postTagIds = post.tags.map(t => t.tag.id);
-    if (postTagIds.some(id => likedTagIds.includes(id))) score += 3;
+    const postTagIds = post.tags.map((t) => t.tag.id);
+    if (postTagIds.some((id) => likedTagIds.includes(id))) score += 3;
 
-    // +2 if recent (within 7 days)
     if (post.createdAt >= sevenDaysAgo) score += 2;
-
-    // +1 if popular
     if (post._count.likes > 10) score += 1;
-
-    // -100 if already liked
     if (post.likes.length > 0) score -= 100;
 
-    return { post, score };
+    return { post: post as RawPost, score };
   });
 
   scored.sort((a, b) => {
@@ -120,41 +199,104 @@ export async function getRecommendedFeed(
     return b.post.createdAt.getTime() - a.post.createdAt.getTime();
   });
 
-  const isFollowingSet = new Set(followingIds);
+  const followingSet = new Set(followingIds);
+  return scored.slice(0, limit).map(({ post }) => mapPostToFeedPost(post, followingSet));
+}
 
-  return scored.slice(0, limit).map(({ post }) => ({
-    id: post.id,
-    title: post.title,
-    subtitle: post.subtitle,
-    description: post.description,
-    isPublic: post.isPublic,
-    createdAt: post.createdAt,
-    authorId: post.author.id,
-    authorName: post.author.name,
-    authorImage: post.author.image,
-    authorUsername: post.author.username,
-    likeCount: post._count.likes,
-    commentCount: post._count.comments,
-    isLiked: post.likes.length > 0,
-    isBookmarked: post.bookmarks.length > 0,
-    isFollowing: isFollowingSet.has(post.author.id),
-    media: post.media.map(m => ({
-      id: m.id,
-      type: m.type,
-      url: m.url,
-      mimeType: m.mimeType,
-      width: m.width,
-      height: m.height,
-      duration: m.duration,
-      order: m.order,
+export async function searchFeedContent(
+  userId: string,
+  query: string
+): Promise<{ users: SearchUser[]; posts: FeedPost[] }> {
+  const q = query.trim();
+  if (!q) {
+    return { users: [], posts: [] };
+  }
+
+  const followingIds = await getFollowingIds(userId);
+  const followingSet = new Set(followingIds);
+
+  const [users, posts] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        id: { not: userId },
+        OR: [
+          { username: { contains: q, mode: "insensitive" } },
+          { name: { contains: q, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        image: true,
+        isPrivate: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    prisma.post.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { title: { contains: q, mode: "insensitive" } },
+              { subtitle: { contains: q, mode: "insensitive" } },
+              { description: { contains: q, mode: "insensitive" } },
+              { tags: { some: { tag: { name: { contains: q, mode: "insensitive" } } } } },
+              { author: { username: { contains: q, mode: "insensitive" } } },
+              { author: { name: { contains: q, mode: "insensitive" } } },
+            ],
+          },
+          {
+            OR: [
+              { authorId: userId },
+              {
+                AND: [
+                  { isPublic: true },
+                  {
+                    OR: [
+                      { author: { isPrivate: false } },
+                      {
+                        authorId: {
+                          in: followingIds.length > 0 ? followingIds : ["__none__"],
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      include: {
+        author: { select: { id: true, name: true, image: true, username: true } },
+        media: { orderBy: { order: "asc" } },
+        tags: { include: { tag: true } },
+        likes: { where: { userId }, select: { id: true } },
+        bookmarks: { where: { userId }, select: { id: true } },
+        _count: { select: { likes: true, comments: true } },
+        comments: {
+          take: 2,
+          orderBy: { createdAt: "desc" },
+          include: { user: { select: { name: true, image: true } } },
+        },
+        manuscriptOcr: { select: { ocrStatus: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    }),
+  ]);
+
+  return {
+    users: users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      username: u.username,
+      image: u.image,
+      isPrivate: u.isPrivate,
+      isFollowing: followingSet.has(u.id),
     })),
-    tags: post.tags.map(t => t.tag.name),
-    recentComments: post.comments.map(c => ({
-      id: c.id,
-      body: c.body,
-      userName: c.user.name,
-      userImage: c.user.image,
-    })),
-    ocrStatus: post.manuscriptOcr?.ocrStatus ?? null,
-  }));
+    posts: (posts as RawPost[]).map((post) => mapPostToFeedPost(post, followingSet)),
+  };
 }

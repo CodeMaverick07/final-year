@@ -19,7 +19,9 @@ export default async function PostDetailPage({ params }: Props) {
   const post = await prisma.post.findUnique({
     where: { id },
     include: {
-      author: { select: { id: true, name: true, username: true, image: true } },
+      author: {
+        select: { id: true, name: true, username: true, image: true, isPrivate: true },
+      },
       media: { orderBy: { order: "asc" } },
       tags: { include: { tag: true } },
       comments: {
@@ -42,9 +44,6 @@ export default async function PostDetailPage({ params }: Props) {
 
   if (!post) notFound();
 
-  // Check if private post and not the author
-  if (!post.isPublic && post.authorId !== session.user.id) notFound();
-
   const [isLiked, isBookmarked, isFollowing] = await Promise.all([
     prisma.like.findUnique({
       where: { userId_postId: { userId: session.user.id, postId: id } },
@@ -62,11 +61,17 @@ export default async function PostDetailPage({ params }: Props) {
     }).then(Boolean),
   ]);
 
+  const isOwnPost = post.authorId === session.user.id;
+  if (!isOwnPost) {
+    if (!post.isPublic) notFound();
+    if (post.author.isPrivate && !isFollowing) notFound();
+  }
+
   const ocr = post.manuscriptOcr;
 
   return (
-    <div className="min-h-screen bg-bg pt-20">
-      <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="min-h-screen bg-bg pt-16 md:pt-20">
+      <div className="mx-auto max-w-3xl px-4 py-6 md:py-8">
         <PostDetailClient
           post={{
             ...post,

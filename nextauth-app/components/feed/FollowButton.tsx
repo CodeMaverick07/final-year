@@ -1,6 +1,7 @@
 "use client";
 
 import { useOptimistic, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toggleFollow } from "@/app/actions/social";
 
 type FollowButtonProps = {
@@ -10,6 +11,7 @@ type FollowButtonProps = {
 };
 
 export default function FollowButton({ targetUserId, initialFollowing, compact = false }: FollowButtonProps) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [optimistic, addOptimistic] = useOptimistic(
     { following: initialFollowing },
@@ -23,6 +25,7 @@ export default function FollowButton({ targetUserId, initialFollowing, compact =
     startTransition(async () => {
       addOptimistic(action);
       await toggleFollow(targetUserId);
+      router.refresh();
     });
   }
 

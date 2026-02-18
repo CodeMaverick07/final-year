@@ -24,6 +24,7 @@ export default async function UserProfilePage({ params }: Props) {
       username: true,
       image: true,
       bio: true,
+      isPrivate: true,
       _count: {
         select: {
           posts: true,
@@ -49,34 +50,50 @@ export default async function UserProfilePage({ params }: Props) {
         },
       }))
     : false;
+  const canViewPosts = isOwnProfile || !user.isPrivate || isFollowing;
+  const canViewConnections = isOwnProfile || isFollowing;
 
   // Fetch all posts for the user
-  const posts = await prisma.post.findMany({
-    where: {
-      authorId: user.id,
-      ...(isOwnProfile ? {} : { isPublic: true }),
-    },
-    include: {
-      media: { orderBy: { order: "asc" }, take: 1, select: { type: true, url: true } },
-      _count: { select: { likes: true, comments: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const posts = canViewPosts
+    ? await prisma.post.findMany({
+        where: {
+          authorId: user.id,
+          ...(isOwnProfile ? {} : { isPublic: true }),
+        },
+        include: {
+          media: {
+            orderBy: { order: "asc" },
+            take: 1,
+            select: { type: true, url: true, mimeType: true },
+          },
+          _count: { select: { likes: true, comments: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
   // Fetch followers and following for the modal
   const [followers, following] = await Promise.all([
-    prisma.follow.findMany({
-      where: { followingId: user.id },
-      include: {
-        follower: { select: { id: true, name: true, username: true, image: true } },
-      },
-    }),
-    prisma.follow.findMany({
-      where: { followerId: user.id },
-      include: {
-        following: { select: { id: true, name: true, username: true, image: true } },
-      },
-    }),
+    canViewConnections
+      ? prisma.follow.findMany({
+          where: { followingId: user.id },
+          include: {
+            follower: {
+              select: { id: true, name: true, username: true, image: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    canViewConnections
+      ? prisma.follow.findMany({
+          where: { followerId: user.id },
+          include: {
+            following: {
+              select: { id: true, name: true, username: true, image: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   // Check which of these users the current user follows
@@ -100,12 +117,14 @@ export default async function UserProfilePage({ params }: Props) {
   }));
 
   return (
-    <div className="min-h-screen bg-bg pt-20">
-      <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="min-h-screen bg-bg pt-16 md:pt-20">
+      <div className="mx-auto max-w-3xl px-4 py-6 md:py-8">
         <ProfileClient
           user={user}
           isOwnProfile={isOwnProfile}
           isFollowing={isFollowing}
+          canViewPosts={canViewPosts}
+          canViewConnections={canViewConnections}
           posts={posts}
           followers={followerList}
           following={followingList}

@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import Navbar from "@/components/Navbar";
+import { redirect } from "next/navigation";
 
 export default async function Home() {
   const session = await auth();
+  if (session?.user?.id) {
+    redirect("/feed");
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">

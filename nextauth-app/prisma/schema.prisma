@@ -18,6 +18,7 @@ model User {
   password      String?   // nullable — OAuth users won't have one
   bio           String?
   username      String?   @unique
+  isPrivate     Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -78,6 +79,7 @@ model Post {
   subtitle    String?
   description String?     @db.Text
   isPublic    Boolean     @default(true)
+  sourceType  PostSource  @default(UPLOAD)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -90,6 +92,12 @@ model Post {
   bookmarks     Bookmark[]
   tags          PostTag[]
   manuscriptOcr ManuscriptOCR?
+}
+
+enum PostSource {
+  UPLOAD    // traditional file upload
+  CAPTURE   // captured via camera
+  RECORD    // recorded via mic/camera
 }
 
 enum MediaType {
@@ -237,4 +245,36 @@ enum TranslationStatus {
   DONE          // both translations stored
   PARTIAL       // one language done
   FAILED
+}
+
+model ProcessingJob {
+  id          String    @id @default(cuid())
+  postId      String    @unique   // one active job per post at a time
+  jobType     JobType
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  lastError   String?
+  payload     Json      // stores URLs, mimeType, etc. needed by the processor
+  scheduledAt DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, scheduledAt]) // fast queue polling query
+}
+
+enum JobType {
+  IMAGE_OCR
+  AUDIO_TRANSCRIPTION
+  VIDEO_EXTRACTION
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+  EXHAUSTED   // exceeded maxAttempts — needs manual review
 }

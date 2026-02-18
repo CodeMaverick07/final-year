@@ -8,6 +8,7 @@ import LikeButton from "@/components/feed/LikeButton";
 import BookmarkButton from "@/components/feed/BookmarkButton";
 import FollowButton from "@/components/feed/FollowButton";
 import CommentInput from "@/components/feed/CommentInput";
+import { PostOwnerActions } from "@/components/post/PostOwnerActions";
 import { formatDistanceToNow } from "date-fns";
 
 type Comment = {
@@ -60,6 +61,13 @@ export default function PostDetailClient({
   currentUser,
 }: PostDetailClientProps) {
   const [comments, setComments] = useState(post.comments);
+  const [details, setDetails] = useState({
+    title: post.title,
+    subtitle: post.subtitle,
+    caption: post.description,
+    isPublic: post.isPublic,
+    tags: post.tags,
+  });
 
   return (
     <div className="space-y-6">
@@ -85,8 +93,14 @@ export default function PostDetailClient({
             )}
           </div>
         </Link>
-        {currentUser.id !== post.author.id && (
+        {currentUser.id !== post.author.id ? (
           <FollowButton targetUserId={post.author.id} initialFollowing={isFollowing} />
+        ) : (
+          <PostOwnerActions
+            postId={post.id}
+            initial={details}
+            onUpdated={(next) => setDetails(next)}
+          />
         )}
       </div>
 
@@ -109,25 +123,25 @@ export default function PostDetailClient({
 
       {/* Title & Description */}
       <div>
-        <h1 className="font-heading text-2xl font-bold text-text-primary">{post.title}</h1>
-        {post.subtitle && (
-          <p className="mt-1 text-base text-text-muted">{post.subtitle}</p>
+        <h1 className="font-heading text-2xl font-bold text-text-primary">{details.title}</h1>
+        {details.subtitle && (
+          <p className="mt-1 text-base text-text-muted">{details.subtitle}</p>
         )}
-        {post.description && (
+        {details.caption && (
           <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-text-primary/80">
-            {post.description}
+            {details.caption}
           </p>
         )}
         <p className="mt-2 text-xs text-text-muted">
           {formatDistanceToNow(new Date(post.createdAt), { addSuffix: true })}
-          {!post.isPublic && " · Private"}
+          {!details.isPublic && " · Private"}
         </p>
       </div>
 
       {/* Tags */}
-      {post.tags.length > 0 && (
+      {details.tags.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {post.tags.map((tag) => (
+          {details.tags.map((tag) => (
             <span key={tag} className="rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
               #{tag}
             </span>

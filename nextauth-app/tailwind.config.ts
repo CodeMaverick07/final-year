@@ -10,14 +10,14 @@ const config: Config = {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#0F0E0C",
-          surface: "#1A1916",
+          DEFAULT: "rgb(var(--bg) / <alpha-value>)",
+          surface: "rgb(var(--bg-surface) / <alpha-value>)",
         },
-        border: "#2E2C28",
-        accent: "#C9A96E",
-        "text-primary": "#F0EBE1",
-        "text-muted": "#7A7570",
-        "like-red": "#D4574A",
+        border: "rgb(var(--border) / <alpha-value>)",
+        accent: "rgb(var(--accent) / <alpha-value>)",
+        "text-primary": "rgb(var(--text-primary) / <alpha-value>)",
+        "text-muted": "rgb(var(--text-muted) / <alpha-value>)",
+        "like-red": "rgb(var(--like-red) / <alpha-value>)",
       },
       fontFamily: {
         heading: ["var(--font-playfair)", "serif"],

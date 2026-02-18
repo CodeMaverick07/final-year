@@ -1,3 +1,6 @@
+// NOTE: This route is no longer called by the app.
+// Processing is now handled by the cron queue at /api/cron/process-queue
+// Kept for manual debugging only.
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runGeminiAudioTranscription, runGeminiReconstruction } from "@/lib/gemini";

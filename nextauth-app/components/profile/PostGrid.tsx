@@ -4,7 +4,7 @@ type PostGridItem = {
   id: string;
   title: string;
   isPublic: boolean;
-  media: { type: string; url: string }[];
+  media: { type: string; url: string; mimeType: string | null }[];
   _count: { likes: number; comments: number };
   manuscriptOcr?: { ocrStatus: string } | null;
 };
@@ -38,7 +38,7 @@ export default function PostGrid({ posts }: PostGridProps) {
             className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-bg-surface"
           >
             {/* Thumbnail */}
-            {firstMedia?.type === "IMAGE" ? (
+            {firstMedia?.type === "IMAGE" && firstMedia.mimeType !== "application/pdf" ? (
               <img
                 src={firstMedia.url}
                 alt={post.title}

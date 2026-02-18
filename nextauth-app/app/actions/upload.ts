@@ -1,6 +1,7 @@
 "use server";
 
 import { auth } from "@/auth";
+import { enqueueJob } from "@/lib/jobqueue";
 import { prisma } from "@/lib/prisma";
 import { generatePresignedUploadUrl, getPublicUrl } from "@/lib/s3";
 import { nanoid } from "nanoid";
@@ -24,10 +25,47 @@ const CreatePostSchema = z.object({
 
 export type CreatePostInput = z.infer<typeof CreatePostSchema>;
 
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff"]);
+const AUDIO_EXTENSIONS = new Set(["mp3", "wav", "m4a", "ogg", "aac", "flac"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "mov", "webm", "mkv", "avi", "m4v"]);
+
+function inferMediaType(file: { name: string; type: string }) {
+  const mime = file.type.toLowerCase();
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+
+  const isPdf =
+    mime === "application/pdf" ||
+    mime === "application/x-pdf" ||
+    ext === "pdf";
+
+  if (isPdf) {
+    return { mediaType: "IMAGE" as const, mimeType: "application/pdf" };
+  }
+  if (mime.startsWith("image/") || IMAGE_EXTENSIONS.has(ext)) {
+    return { mediaType: "IMAGE" as const, mimeType: file.type || "image/jpeg" };
+  }
+  if (mime.startsWith("audio/") || AUDIO_EXTENSIONS.has(ext)) {
+    return { mediaType: "AUDIO" as const, mimeType: file.type || "audio/mpeg" };
+  }
+  if (mime.startsWith("video/") || VIDEO_EXTENSIONS.has(ext)) {
+    return { mediaType: "VIDEO" as const, mimeType: file.type || "video/mp4" };
+  }
+
+  // Keep unknowns processable through image OCR path as a safe default.
+  return { mediaType: "IMAGE" as const, mimeType: file.type || "application/octet-stream" };
+}
+
 // Step 1: Create post shell + get presigned URLs for each file
 export async function initiateUpload(input: CreatePostInput) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
+  const userExists = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+  if (!userExists) {
+    throw new Error("Session is stale. Please sign out and sign in again.");
+  }
 
   const validated = CreatePostSchema.parse(input);
 
@@ -59,14 +97,9 @@ export async function initiateUpload(input: CreatePostInput) {
     validated.files.map(async (file, order) => {
       const ext = file.name.split(".").pop();
       const key = `uploads/${session.user!.id}/${post.id}/${nanoid()}.${ext}`;
-      const presignedUrl = await generatePresignedUploadUrl(key, file.type);
+      const { mediaType, mimeType } = inferMediaType(file);
+      const presignedUrl = await generatePresignedUploadUrl(key, mimeType);
       const publicUrl = getPublicUrl(key);
-
-      const mediaType = file.type.startsWith("image/")
-        ? "IMAGE" as const
-        : file.type.startsWith("audio/")
-        ? "AUDIO" as const
-        : "VIDEO" as const;
 
       await prisma.media.create({
         data: {
@@ -74,13 +107,13 @@ export async function initiateUpload(input: CreatePostInput) {
           type: mediaType,
           url: publicUrl,
           s3Key: key,
-          mimeType: file.type,
+          mimeType,
           size: file.size,
           order,
         },
       });
 
-      return { key, presignedUrl, publicUrl };
+      return { key, presignedUrl, publicUrl, contentType: mimeType };
     })
   );
 
@@ -96,6 +129,13 @@ export async function initiateUpload(input: CreatePostInput) {
 export async function finalizeUpload(postId: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
+  const userExists = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+  if (!userExists) {
+    throw new Error("Session is stale. Please sign out and sign in again.");
+  }
 
   // Verify ownership — include ALL media types for smart routing
   const post = await prisma.post.findUnique({
@@ -107,57 +147,98 @@ export async function finalizeUpload(postId: string) {
   // Only process if there is media
   if (post.media.length === 0) return { queued: false };
 
-  // Create OCR stub
-  await prisma.manuscriptOCR.create({
-    data: { postId, rawOcrText: "", ocrStatus: "PROCESSING" },
+  // Create/update OCR stub
+  await prisma.manuscriptOCR.upsert({
+    where: { postId },
+    create: { postId, rawOcrText: "", ocrStatus: "PENDING" },
+    update: {
+      rawOcrText: "",
+      reconstructedText: null,
+      ocrStatus: "PENDING",
+      ocrError: null,
+    },
   });
 
-  // Route to the correct pipeline based on what media was uploaded
+  // Route to the queue based on uploaded media
   const images = post.media.filter((m) => m.type === "IMAGE");
   const audios  = post.media.filter((m) => m.type === "AUDIO");
   const videos  = post.media.filter((m) => m.type === "VIDEO");
 
-  const baseHeaders = {
-    "Content-Type": "application/json",
-    "x-internal-secret": process.env.AUTH_SECRET!,
-  };
-  const baseUrl = process.env.NEXTAUTH_URL;
-
-  if (images.length > 0) {
-    // Existing image OCR pipeline — unchanged
-    fetch(`${baseUrl}/api/internal/ocr-pipeline`, {
-      method: "POST",
-      headers: baseHeaders,
-      body: JSON.stringify({ postId, imageUrls: images.map((m) => m.url) }),
-    }).catch(console.error);
-
-  } else if (audios.length > 0) {
-    // Use first audio file for transcription
-    const audio = audios[0];
-    fetch(`${baseUrl}/api/internal/audio-pipeline`, {
-      method: "POST",
-      headers: baseHeaders,
-      body: JSON.stringify({
-        postId,
+  try {
+    if (images.length > 0) {
+      await enqueueJob(post.id, "IMAGE_OCR", {
+        imageUrls: images.map((m) => m.url),
+      });
+    } else if (audios.length > 0) {
+      const audio = audios[0];
+      await enqueueJob(post.id, "AUDIO_TRANSCRIPTION", {
         audioUrl: audio.url,
         mimeType: audio.mimeType ?? "audio/mpeg",
-      }),
-    }).catch(console.error);
+      });
+    } else if (videos.length > 0) {
+      const video = videos[0];
+      await enqueueJob(post.id, "VIDEO_EXTRACTION", {
+        videoUrl: video.url,
+      });
+    } else {
+      await prisma.manuscriptOCR.update({
+        where: { postId },
+        data: { ocrStatus: "FAILED", ocrError: "No processable media found" },
+      });
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown queue error";
+    if (
+      message.includes("processingJob") ||
+      message.includes("ProcessingJob")
+    ) {
+      throw new Error(
+        "Failed to enqueue processing job: ProcessingJob table missing. Run `npx prisma migrate dev` then `npx prisma generate`."
+      );
+    }
+    throw new Error(`Failed to enqueue processing job: ${message}`);
+  }
 
-  } else if (videos.length > 0) {
-    // Use first video file for extraction
-    const video = videos[0];
-    fetch(`${baseUrl}/api/internal/video-pipeline`, {
-      method: "POST",
-      headers: baseHeaders,
-      body: JSON.stringify({ postId, videoUrl: video.url }),
-    }).catch(console.error);
+  // Convert PDFs to page images in background (for frontend carousel rendering).
+  // Do not block upload completion/redirect on this potentially slow operation.
+  const pdfs = post.media.filter(
+    (m) => m.mimeType === "application/pdf" || m.url.toLowerCase().endsWith(".pdf")
+  );
+  if (pdfs.length > 0 && process.env.AUTH_SECRET) {
+    const baseUrl =
+      process.env.NEXTAUTH_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
-  } else {
-    // No processable media — mark as failed
-    await prisma.manuscriptOCR.update({
-      where: { postId },
-      data: { ocrStatus: "FAILED", ocrError: "No processable media found" },
+    for (const pdf of pdfs) {
+      fetch(`${baseUrl}/api/internal/pdf-to-images`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-secret": process.env.AUTH_SECRET,
+        },
+        body: JSON.stringify({
+          postId,
+          pdfUrl: pdf.url,
+          mediaId: pdf.id,
+          insertOrder: pdf.order,
+        }),
+        cache: "no-store",
+      }).catch((err) => {
+        console.error("[finalizeUpload] PDF->images background conversion failed:", err);
+      });
+    }
+  }
+
+  // Trigger queue processor immediately so OCR runs without waiting for cron
+  const baseUrl = process.env.NEXTAUTH_URL;
+  const secret = process.env.CRON_SECRET || process.env.AUTH_SECRET;
+  if (baseUrl && secret) {
+    fetch(`${baseUrl}/api/cron/process-queue`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${secret}` },
+      cache: "no-store",
+    }).catch((err) => {
+      console.error("[finalizeUpload] Failed to trigger process-queue:", err);
     });
   }
 

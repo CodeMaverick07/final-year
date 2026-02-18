@@ -2,37 +2,46 @@
 
 type UploadProgressProps = {
   files: { name: string; progress: number; done: boolean; error?: string }[];
+  phase?: "uploading" | "finalizing";
 };
 
-export default function UploadProgress({ files }: UploadProgressProps) {
+export default function UploadProgress({ files, phase = "uploading" }: UploadProgressProps) {
   const allDone = files.every((f) => f.done);
   const overallProgress = files.length > 0
     ? Math.round(files.reduce((sum, f) => sum + f.progress, 0) / files.length)
     : 0;
+  const title = phase === "finalizing"
+    ? "Preparing post..."
+    : allDone
+      ? "Upload complete!"
+      : "Uploading...";
 
   return (
     <div className="space-y-3">
       {/* Overall */}
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium text-text-primary">
-          {allDone ? "Upload complete!" : "Uploading..."}
+          {title}
         </span>
-        <span className="text-text-muted">{overallProgress}%</span>
+        <span className="text-text-muted">{phase === "finalizing" ? "Finalizing" : `${overallProgress}%`}</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-border">
-        <div className="progress-bar h-full rounded-full" style={{ width: `${overallProgress}%` }} />
+        <div
+          className="upload-progress-fill h-full rounded-full"
+          style={{ width: `${overallProgress}%` }}
+        />
       </div>
 
       {/* Per-file */}
       <div className="space-y-2">
-        {files.map((file) => (
-          <div key={file.name} className="flex items-center gap-3">
+        {files.map((file, index) => (
+          <div key={`${file.name}-${index}`} className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs text-text-muted">{file.name}</p>
               <div className="mt-1 h-1 overflow-hidden rounded-full bg-border">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    file.error ? "bg-like-red" : "progress-bar"
+                    file.error ? "bg-like-red" : "upload-progress-fill"
                   }`}
                   style={{ width: `${file.progress}%` }}
                 />

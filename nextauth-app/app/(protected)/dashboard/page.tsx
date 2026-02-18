@@ -18,7 +18,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <main className="relative pt-24 pb-16">
+      <main className="relative pb-16 pt-20 md:pt-24">
         {/* Background Effects */}
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-1/2 top-20 -translate-x-1/2 h-[400px] w-[600px] rounded-full bg-gradient-to-b from-indigo-500/10 to-transparent blur-3xl" />
@@ -32,9 +32,9 @@ export default async function DashboardPage() {
               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDM0djZoLTJ2LTZoLTR2NmgtMnYtNmgtNHY2aC0ydi02aC00djZIOHYtNkg0djZIMnYtNkgwVjBoNjB2MzRIMzZ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
             </div>
 
-            <div className="relative px-8 pb-8">
+            <div className="relative px-5 pb-6 sm:px-8 sm:pb-8">
               {/* Avatar */}
-              <div className="-mt-12 mb-6">
+              <div className="-mt-10 mb-6 md:-mt-12">
                 {user.image ? (
                   <img
                     src={user.image}
