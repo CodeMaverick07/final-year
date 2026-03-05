@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: "@yush2004"
       POSTGRES_DB: nextauth_db
     restart: unless-stopped
 

@@ -15,22 +15,22 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
-  password      String?   // nullable — OAuth users won't have one
+  password      String? // nullable — OAuth users won't have one
   bio           String?
   username      String?   @unique
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
+  accounts Account[]
+  sessions Session[]
 
-  posts         Post[]
-  likes         Like[]
-  comments      Comment[]
-  bookmarks     Bookmark[]
+  posts     Post[]
+  likes     Like[]
+  comments  Comment[]
+  bookmarks Bookmark[]
 
-  followers     Follow[]  @relation("Following") // people who follow this user
-  following     Follow[]  @relation("Follower")  // people this user follows
+  followers Follow[] @relation("Following") // people who follow this user
+  following Follow[] @relation("Follower") // people this user follows
 
   notifications Notification[] @relation("NotificationRecipient")
 }
@@ -73,16 +73,16 @@ model VerificationToken {
 // ─── Core Content Models ──────────────────────────────────────────────────────
 
 model Post {
-  id          String      @id @default(cuid())
+  id          String   @id @default(cuid())
   title       String
   subtitle    String?
-  description String?     @db.Text
-  isPublic    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  description String?  @db.Text
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  authorId    String
-  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   media         Media[]
   likes         Like[]
@@ -103,12 +103,12 @@ model Media {
   postId    String
   post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
   type      MediaType
-  url       String    // S3 public or presigned URL
-  s3Key     String    // raw S3 object key for deletion
+  url       String // S3 public or presigned URL
+  s3Key     String // raw S3 object key for deletion
   mimeType  String?
-  size      Int?      // bytes
-  duration  Int?      // seconds — for audio/video
-  width     Int?      // px — for images/video
+  size      Int? // bytes
+  duration  Int? // seconds — for audio/video
+  width     Int? // px — for images/video
   height    Int?
   order     Int       @default(0)
   createdAt DateTime  @default(now())
@@ -131,14 +131,14 @@ model Comment {
   body      String   @db.Text
   userId    String
   postId    String
-  parentId  String?  // for threaded replies
+  parentId  String? // for threaded replies
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  post     Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
-  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
-  replies  Comment[] @relation("CommentReplies")
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post    Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
 }
 
 model Bookmark {
@@ -155,11 +155,11 @@ model Bookmark {
 
 model Follow {
   id          String   @id @default(cuid())
-  followerId  String   // the person who clicks "Follow"
-  followingId String   // the person being followed
+  followerId  String // the person who clicks "Follow"
+  followingId String // the person being followed
   createdAt   DateTime @default(now())
 
-  follower  User @relation("Follower",  fields: [followerId],  references: [id], onDelete: Cascade)
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
   following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
@@ -176,7 +176,7 @@ model PostTag {
   tagId  String
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  tag  Tag  @relation(fields: [tagId],  references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([postId, tagId])
 }
@@ -204,37 +204,37 @@ enum NotificationType {
 // ─── OCR & Translation ────────────────────────────────────────────────────────
 
 model ManuscriptOCR {
-  id                  String   @id @default(cuid())
-  postId              String   @unique          // one OCR record per post
-  post                Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  postId String @unique // one OCR record per post
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
 
-  rawOcrText          String   @db.Text         // raw output from Google Vision OCR
-  reconstructedText   String?  @db.Text         // Gemini-filled/reconstructed version
-  ocrConfidence       Float?                    // average confidence score if available
-  ocrStatus           OcrStatus @default(PENDING)
-  ocrError            String?
+  rawOcrText        String    @db.Text // raw output from Google Vision OCR
+  reconstructedText String?   @db.Text // Gemini-filled/reconstructed version
+  ocrConfidence     Float? // average confidence score if available
+  ocrStatus         OcrStatus @default(PENDING)
+  ocrError          String?
 
   // Translations — null until user requests them
-  translationHindi    String?  @db.Text
-  translationEnglish  String?  @db.Text
-  translationStatus   TranslationStatus @default(NONE)
+  translationHindi   String?           @db.Text
+  translationEnglish String?           @db.Text
+  translationStatus  TranslationStatus @default(NONE)
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum OcrStatus {
-  PENDING       // upload done, OCR not yet run
-  PROCESSING    // OCR call in-flight
+  PENDING // upload done, OCR not yet run
+  PROCESSING // OCR call in-flight
   RECONSTRUCTING // Gemini filling blanks
-  DONE          // reconstructedText is ready
+  DONE // reconstructedText is ready
   FAILED
 }
 
 enum TranslationStatus {
-  NONE          // never requested
-  PROCESSING    // Gemini call in-flight
-  DONE          // both translations stored
-  PARTIAL       // one language done
+  NONE // never requested
+  PROCESSING // Gemini call in-flight
+  DONE // both translations stored
+  PARTIAL // one language done
   FAILED
 }

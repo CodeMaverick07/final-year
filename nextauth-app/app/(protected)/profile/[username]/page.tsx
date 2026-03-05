@@ -57,24 +57,34 @@ export default async function UserProfilePage({ params }: Props) {
       ...(isOwnProfile ? {} : { isPublic: true }),
     },
     include: {
-      media: { orderBy: { order: "asc" }, take: 1, select: { type: true, url: true } },
+      media: {
+        orderBy: { order: "asc" },
+        take: 1,
+        select: { type: true, url: true },
+      },
       _count: { select: { likes: true, comments: true } },
     },
     orderBy: { createdAt: "desc" },
   });
+
+  console.log("Fetched posts:", posts);
 
   // Fetch followers and following for the modal
   const [followers, following] = await Promise.all([
     prisma.follow.findMany({
       where: { followingId: user.id },
       include: {
-        follower: { select: { id: true, name: true, username: true, image: true } },
+        follower: {
+          select: { id: true, name: true, username: true, image: true },
+        },
       },
     }),
     prisma.follow.findMany({
       where: { followerId: user.id },
       include: {
-        following: { select: { id: true, name: true, username: true, image: true } },
+        following: {
+          select: { id: true, name: true, username: true, image: true },
+        },
       },
     }),
   ]);
@@ -86,7 +96,7 @@ export default async function UserProfilePage({ params }: Props) {
         where: { followerId: session.user.id },
         select: { followingId: true },
       })
-    ).map((f) => f.followingId)
+    ).map((f) => f.followingId),
   );
 
   const followerList = followers.map((f) => ({
