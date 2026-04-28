@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node /tmp/gen-icons.js /Users/chinmaychaudhari/Documents/coding/final-year/nextauth-app/public/icons)",
+      "Bash(bun install *)",
+      "Bash(bun run *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:4000/manifest.json)",
+      "Bash(curl -s http://localhost:4000/manifest.json)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://localhost:4000/sw.js)",
+      "Bash(curl -s -o /dev/null -w \"icon-192: %{http_code}\\\\n\" http://localhost:4000/icons/icon-192.png)",
+      "Bash(curl -s -o /dev/null -w \"icon-512: %{http_code}\\\\n\" http://localhost:4000/icons/icon-512.png)",
+      "Bash(curl -s -o /dev/null -w \"root: %{http_code}\\\\n\" http://localhost:4000/)",
+      "Bash(curl -s http://localhost:4000/sw.js)",
+      "Bash(curl -s -I http://localhost:4000/)"
+    ]
+  }
+}
