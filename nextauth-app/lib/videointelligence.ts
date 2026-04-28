@@ -1,7 +1,7 @@
 import { VideoIntelligenceServiceClient, protos } from "@google-cloud/video-intelligence";
 
 const client = new VideoIntelligenceServiceClient();
-// Uses GOOGLE_APPLICATION_CREDENTIALS automatically — same service account as Vision API
+// Uses Application Default Credentials (ADC) automatically via gcloud auth
 
 type Feature = protos.google.cloud.videointelligence.v1.Feature;
 
@@ -21,7 +21,7 @@ export async function extractVideoContent(videoUrl: string): Promise<string> {
         languageCode: "hi-IN",
         // Cast to any to avoid strict type checking if the type definition is outdated or incomplete
         // regarding alternativeLanguageCodes, which IS supported by the underlying API.
-        alternativeLanguageCodes: ["en-IN", "sa"], 
+        alternativeLanguageCodes: ["en-IN", "sa"],
         enableAutomaticPunctuation: true,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,

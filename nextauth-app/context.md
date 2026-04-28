@@ -7,7 +7,7 @@ This file contains comprehensive information about the project structure, techno
 ## 1. Project Overview
 
 **Name**: Sanskriti (built on NextAuth App / AuthKit)
-**Goal**: A social media platform for manuscript sharing and digitization. Users upload manuscripts (images, audio recordings, video clips), tag them, interact via likes/comments/bookmarks, follow each other, and discover work through a personalized recommendation feed. The platform also provides automatic OCR (Google Vision), AI-powered text reconstruction (Gemini), and bilingual translation (Hindi + English).
+**Goal**: A social media platform for manuscript sharing and digitization. Users upload manuscripts (images, audio recordings, video clips), tag them, interact via likes/comments/bookmarks, follow each other, and discover work through a personalized recommendation feed. The platform also provides automatic OCR via a custom Sanskrit Manuscript Text Extraction pipeline, and bilingual translation (Hindi + English) via Gemini.
 
 **Core Features**:
 - Multi-provider authentication (Google, GitHub, Credentials) via NextAuth.js v5.
@@ -17,8 +17,11 @@ This file contains comprehensive information about the project structure, techno
 - **Camera Capture** (`/capture`): Capture single photos or multiple pages (combined into PDF) using device camera.
 - **Audio/Video Recording** (`/record`): Record audio commentary or video narration directly in the browser.
 - Automatic OCR/Extraction pipeline:
-  - **Images/PDFs**: Google Vision text detection → Gemini AI reconstruction.
-  - **Audio**: Gemini multimodal transcription → Gemini AI reconstruction.
+  - **Images/PDFs**: Custom Sanskrit Manuscript OCR pipeline:
+    1. **Image Preprocessing** — Grayscale Conversion → Noise Removal (Denoising) → Contrast Enhancement → Adaptive Binarization
+    2. **Text Detection** — Projection Profiling (Horizontal/Vertical) + Bounding Box Detection
+    3. **OCR Engine** — Feature Extraction (CNN/RNN) → Sequence Modeling (LSTM/GRU) → Character Prediction (CTC/Attention) → Text Output
+  - **Audio**: Gemini multimodal transcription.
   - **Video**: Google Video Intelligence API (Text + Speech) → Gemini AI reconstruction.
 - Bilingual translation: Hindi + English in a single Gemini API call, cached per post.
 - Social interactions: Like, Comment (threaded), Bookmark, Follow/Unfollow.
@@ -47,8 +50,8 @@ This file contains comprehensive information about the project structure, techno
 | **Authentication** | NextAuth.js v5 (Beta) / Auth.js |
 | **Storage** | AWS S3 (presigned upload URLs) |
 | **Storage** | AWS S3 (presigned upload URLs) |
-| **OCR / Extraction** | Google Cloud Vision (Images) + Video Intelligence (Video) |
-| **AI / LLM** | Google Gemini (via `@google/generative-ai`) |
+| **OCR / Extraction** | Custom Sanskrit Manuscript OCR Service (Image Preprocessing + Text Detection + CNN/RNN + LSTM/GRU + CTC/Attention) + Google Video Intelligence (Video) |
+| **AI / LLM** | Google Gemini (via `@google/generative-ai`) — used for Audio Transcription & Translation only |
 | **UI Libraries** | Radix UI (Dialog, Tabs, Toggle), Embla Carousel, react-dropzone |
 | **Utilities** | nanoid, date-fns, zod, react-hot-toast, bcryptjs, jspdf, browser-image-compression |
 | **Fonts** | Playfair Display (headings), DM Sans (body) via next/font/google |
@@ -165,15 +168,24 @@ nextauth-app/
 └── .env.local                  # Environment variables (see §8)
 ```
 
-### 3b. `ocr/` — Standalone OCR Service
+### 3b. `ocr/` — Standalone Sanskrit Manuscript OCR Service
 
 ```
 ocr/
-├── app.py              # Standalone FastAPI OCR server (Google Vision)
-├── requirements.txt    # fastapi, uvicorn, python-multipart, google-cloud-vision
+├── app.py              # FastAPI OCR server implementing the full Sanskrit Manuscript Text Extraction pipeline
+├── requirements.txt    # fastapi, uvicorn, python-multipart, opencv-python, numpy, torch, torchvision, pdf2image
 ├── image.png           # Test manuscript image
 └── venv/               # Python virtual environment
 ```
+
+**Pipeline Implemented in `app.py`**:
+1. **Image Preprocessing**: Grayscale Conversion → Noise Removal (Gaussian / Non-local Means Denoising) → Contrast Enhancement (CLAHE) → Adaptive Binarization (Sauvola / Otsu)
+2. **Text Detection**: Projection Profiling (Horizontal & Vertical histograms) + Bounding Box Detection to isolate text line / word regions
+3. **OCR Engine**:
+   - **Feature Extraction**: CNN + RNN encoder over detected text image patches
+   - **Sequence Modeling**: Bidirectional LSTM / GRU layers
+   - **Character Prediction**: CTC (Connectionist Temporal Classification) / Attention decoder
+   - **Text Output**: Final extracted Sanskrit text per bounding region, concatenated as full manuscript output
 
 This is the active OCR service used by the Next.js app (`OCR_SERVICE_URL`). Run it directly with `cd ocr && python app.py` (serves on port 8001).
 
@@ -210,11 +222,11 @@ Split into two files for Edge Runtime compatibility:
 
 ### OCR & Translation Model
 - **ManuscriptOCR**: One-to-one with Post. Fields:
-  - `rawOcrText` (Text) — raw Google Vision output
-  - `reconstructedText` (Text, nullable) — Gemini-cleaned version
-  - `ocrConfidence` (Float, nullable)
+  - `rawOcrText` (Text) — raw output from the custom Sanskrit OCR engine (post CTC/Attention decoding)
+  - `reconstructedText` (Text, nullable) — cleaned/post-processed version of the OCR output
+  - `ocrConfidence` (Float, nullable) — CTC/Attention confidence score from the OCR engine
   - `ocrStatus`: `PENDING` → `PROCESSING` → `RECONSTRUCTING` → `DONE` / `FAILED`
-  - `translationHindi` / `translationEnglish` (Text, nullable) — cached translations
+  - `translationHindi` / `translationEnglish` (Text, nullable) — cached Gemini translations
   - `translationStatus`: `NONE` → `PROCESSING` → `DONE` / `PARTIAL` / `FAILED`
 
 ### Post Source Tracking
@@ -263,14 +275,19 @@ Split into two files for Edge Runtime compatibility:
 
 **2. Processing Worker**:
 - `GET /api/cron/process-queue` claims one pending job atomically
-- **IMAGE_OCR**: fetches media (including PDF-derived page images) and calls standalone OCR service at `OCR_SERVICE_URL` (`/ocr`)
+- **IMAGE_OCR**: Fetches media (including PDF-derived page images) and sends to the standalone Sanskrit Manuscript OCR service at `OCR_SERVICE_URL` (`/ocr`). The service runs the full pipeline:
+  1. **Image Preprocessing**: Grayscale → Noise Removal (Denoising) → Contrast Enhancement → Adaptive Binarization
+  2. **Text Detection**: Projection Profiling (Horizontal/Vertical) + Bounding Box Detection to isolate text regions
+  3. **OCR Engine**: Feature Extraction (CNN/RNN) → Sequence Modeling (LSTM/GRU) → Character Prediction (CTC/Attention) → Final Sanskrit Text Output
 - **AUDIO_TRANSCRIPTION**: runs Gemini multimodal transcription
 - **VIDEO_EXTRACTION**: runs Video Intelligence extraction
 
-**3. Reconstruction + Completion**:
-- Saves raw text (`ocrStatus: RECONSTRUCTING`)
-- Runs `runGeminiReconstruction()`
-- Saves `reconstructedText` (`ocrStatus: DONE`) and marks queue job `DONE`
+**3. OCR Result Storage + Completion**:
+- Saves `rawOcrText` from the OCR engine's output (`ocrStatus: RECONSTRUCTING`)
+- Runs post-processing / cleanup on the raw OCR text (`reconstructedText`)
+- Saves `reconstructedText` and `ocrConfidence` (`ocrStatus: DONE`), marks queue job `DONE`
+
+> **Note**: Unlike the previous flow, OCR text reconstruction is performed natively by the custom OCR engine (CTC/Attention decoder). Gemini is **not** used for image OCR reconstruction — it is only used for **audio transcription** and **translation**.
 
 **4. Retry Behavior**:
 - Retryable failures are requeued with backoff
@@ -367,13 +384,15 @@ AWS_SECRET_ACCESS_KEY="..."
 AWS_REGION="eu-north-1"
 AWS_S3_BUCKET="sanskriti-major-project"
 
-# Google Gemini AI
+# Google Gemini AI (used for Audio Transcription & Translation only — NOT for image OCR)
 GOOGLE_GEMINI_API_KEY="..."
 GOOGLE_GEMINI_MODEL_NAME="gemini-2.5-flash"
 GEMINI_MODEL_NAME="gemini-2.5-flash"
 
 # OCR Service
 OCR_SERVICE_URL="http://localhost:8001"
+OCR_SERVICE_URL=http://10.51.141.118:8001
+
 
 # Queue/Cron Auth
 CRON_SECRET="..."
@@ -388,19 +407,21 @@ CRON_SECRET="..."
 3. **Migrate**: `npx prisma migrate dev`
 4. **Dev**: `npm run dev`
 
-### Running the standalone OCR service
+### Running the standalone Sanskrit Manuscript OCR service
 ```bash
-brew install poppler   # required by pdf2image for PDF OCR
+brew install poppler   # required by pdf2image for PDF page extraction
 cd ../ocr
 pip install -r requirements.txt
 python app.py  # serves on http://localhost:8001
 ```
 
-### Google Cloud credentials for OCR
-Export a credentials file path before starting the OCR server:
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/service-account.json"
-```
+**Key dependencies** (`requirements.txt`):
+- `fastapi`, `uvicorn`, `python-multipart` — API server
+- `opencv-python`, `numpy` — Image Preprocessing (grayscale, denoising, contrast, binarization)
+- `torch`, `torchvision` — CNN/RNN Feature Extraction + LSTM/GRU Sequence Modeling + CTC/Attention Decoding
+- `pdf2image` — PDF page extraction (requires `poppler`)
+
+> **No Google Cloud credentials required** for image OCR — the pipeline runs entirely locally using the custom deep learning model.
 
 ---
 
